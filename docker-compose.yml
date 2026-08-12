@@ -1,0 +1,177 @@
+services:
+
+  # ============================
+  # BASE DE DATOS PRODUCTO
+  # ============================
+  producto-db:
+    image: postgres:17
+    container_name: producto-db
+    restart: always
+
+    environment:
+      POSTGRES_DB: producto_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - producto_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d producto_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - tienda-network
+
+  # ============================
+  # BASE DE DATOS INVENTARIO
+  # ============================
+  inventario-db:
+    image: postgres:17
+    container_name: inventario-db
+    restart: always
+
+    environment:
+      POSTGRES_DB: inventario_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - inventario_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inventario_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - tienda-network
+
+  # ============================
+  # BASE DE DATOS VENTA
+  # ============================
+  venta-db:
+    image: postgres:17
+    container_name: venta-db
+    restart: always
+
+    environment:
+      POSTGRES_DB: venta_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+
+    ports:
+      - "5434:5432"
+
+    volumes:
+      - venta_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d venta_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - tienda-network
+
+  # ============================
+  # PRODUCTO SERVICE
+  # ============================
+  producto-service:
+    build:
+      context: ./producto_services  # Direcciona cada proyecto "C:\Users\rober\Desktop\tienda-microservices\producto-service"
+
+    container_name: producto-service
+
+    depends_on:
+      producto-db:
+        condition: service_healthy  # "No inicies producto-service hasta que producto-db esté saludable."
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+
+    networks:
+      - tienda-network
+
+  # ============================
+  # INVENTARIO SERVICE
+  # ============================
+  inventario-service:
+    build:
+      context: ./inventario_services
+
+    container_name: inventario-service
+
+    depends_on: # inventario-service necesita comunicarse con producto-service mediante tu ProductoClient.
+      inventario-db:
+        condition: service_healthy
+      producto-service:
+        condition: service_started
+
+    ports:
+      - "8081:8081"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    
+    networks:
+      - tienda-network
+
+  # ============================
+  # VENTA SERVICE
+  # ============================
+  venta-service:
+    build:
+      context: ./venta_services
+
+    container_name: venta-service
+
+    depends_on: # venta-service necesita comunicarse con producto-service y inventario-services mediante tu ProductoClient y InventarioClient.
+      venta-db:
+        condition: service_healthy
+      producto-service:
+        condition: service_started
+      inventario-service:
+        condition: service_started
+
+    ports:
+      - "8082:8082"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    
+    networks:
+      - tienda-network
+
+# ============================
+# VOLUMENES
+# ============================
+
+volumes:
+
+  producto_data:
+
+  inventario_data:
+
+  venta_data:
+
+# ============================
+# RED
+# ============================
+
+networks:
+
+  tienda-network:
