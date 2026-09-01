@@ -1,0 +1,344 @@
+name: CI/CD Tienda Microservices
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+
+# ============================================================
+# VARIABLES GLOBALES
+# ============================================================
+
+env:
+  JAVA_VERSION: '17'
+
+
+# ============================================================
+# PERMISOS
+# ============================================================
+
+permissions:
+  contents: read
+
+
+# ============================================================
+# JOBS
+# ============================================================
+
+jobs:
+
+  # ==========================================================
+  # JOB 1 - CI
+  # Compilar, ejecutar pruebas y generar JAR
+  # ==========================================================
+
+  build-and-test:
+
+    name: CI - Compilar y Probar
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ------------------------------------------------------
+      # Descargar código
+      # ------------------------------------------------------
+
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # Configurar Java 17
+      # ------------------------------------------------------
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+
+      # ------------------------------------------------------
+      # Dar permisos a Maven Wrapper
+      # ------------------------------------------------------
+
+      - name: Dar permisos a Maven Wrapper
+        run: |
+          chmod +x producto_services/mvnw
+          chmod +x inventario_services/mvnw
+          chmod +x venta_services/mvnw
+
+
+      # ======================================================
+      # PRODUCTO
+      # ======================================================
+
+      - name: Compilar y probar - Producto
+        working-directory: ./producto_services
+        run: ./mvnw clean package -DskipTests=false
+
+
+      # ======================================================
+      # INVENTARIO
+      # ======================================================
+
+      - name: Compilar y probar - Inventario
+        working-directory: ./inventario_services
+        run: ./mvnw clean package -DskipTests=false
+
+
+      # ======================================================
+      # VENTA
+      # ======================================================
+
+      - name: Compilar y probar - Venta
+        working-directory: ./venta_services
+        run: ./mvnw clean package -DskipTests=false
+
+
+      # ======================================================
+      # GUARDAR JARs
+      # ======================================================
+
+      - name: Guardar JARs generados
+        uses: actions/upload-artifact@v4
+        with:
+          name: microservices-jars
+          path: |
+            producto_services/target/*.jar
+            inventario_services/target/*.jar
+            venta_services/target/*.jar
+          retention-days: 1
+
+
+  # ==========================================================
+  # JOB 2 - CD
+  # Construir imágenes Docker y publicarlas en Docker Hub
+  # ==========================================================
+
+  build-push-images:
+
+    name: CD - Docker Build & Push
+
+    needs: build-and-test
+
+    runs-on: ubuntu-latest
+
+    # Ejecutar solamente después de un push a main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+
+      # ------------------------------------------------------
+      # Descargar código
+      # ------------------------------------------------------
+
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # Descargar JARs generados en CI
+      # ------------------------------------------------------
+
+      - name: Descargar JARs
+        uses: actions/download-artifact@v4
+        with:
+          name: microservices-jars
+
+
+      # ------------------------------------------------------
+      # Configurar Docker Buildx
+      # ------------------------------------------------------
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+
+      # ------------------------------------------------------
+      # Login en Docker Hub
+      # ------------------------------------------------------
+
+      - name: Login en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+
+      # ======================================================
+      # PRODUCTO
+      # ======================================================
+
+      - name: Construir y publicar - Producto
+        uses: docker/build-push-action@v6
+        with:
+          context: ./producto_services
+          file: ./producto_services/Dockerfile
+          push: true
+
+          tags: |
+            roberthz/producto-service:${{ github.sha }}
+            roberthz/producto-service:latest
+
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+
+      # ======================================================
+      # INVENTARIO
+      # ======================================================
+
+      - name: Construir y publicar - Inventario
+        uses: docker/build-push-action@v6
+        with:
+          context: ./inventario_services
+          file: ./inventario_services/Dockerfile
+          push: true
+
+          tags: |
+            roberthz/inventario-service:${{ github.sha }}
+            roberthz/inventario-service:latest
+
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+
+      # ======================================================
+      # VENTA
+      # ======================================================
+
+      - name: Construir y publicar - Venta
+        uses: docker/build-push-action@v6
+        with:
+          context: ./venta_services
+          file: ./venta_services/Dockerfile
+          push: true
+
+          tags: |
+            roberthz/venta-service:${{ github.sha }}
+            roberthz/venta-service:latest
+
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+
+  # ==========================================================
+  # JOB 3 - DEPLOY
+  # Desplegar las nuevas imágenes en el servidor
+  # ==========================================================
+
+  deploy:
+
+    name: Deploy - Docker Compose
+
+    needs: build-push-images
+
+    runs-on: ubuntu-latest
+
+    # Ejecutar solamente después de un push a main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+
+      # ------------------------------------------------------
+      # Conectarse al servidor mediante SSH
+      # ------------------------------------------------------
+
+      - name: Conectarse al servidor y desplegar
+        uses: appleboy/ssh-action@v1.2.2
+
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+
+          script: |
+
+            echo "=========================================="
+            echo "Iniciando deployment"
+            echo "=========================================="
+
+
+            # ==================================================
+            # Ir al proyecto
+            # ==================================================
+
+            cd /home/robert/tienda-microservices || exit 1
+
+
+            # ==================================================
+            # Login en Docker Hub
+            # ==================================================
+
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+              -u "${{ secrets.DOCKERHUB_USERNAME }}" \
+              --password-stdin
+
+
+            # ==================================================
+            # Descargar nuevas imágenes
+            # ==================================================
+
+            echo "Descargando nuevas imágenes..."
+
+            docker compose pull
+
+
+            # ==================================================
+            # Levantar nuevos contenedores
+            # ==================================================
+
+            echo "Actualizando servicios..."
+
+            docker compose up -d --remove-orphans
+
+
+            # ==================================================
+            # Esperar que los servicios inicien
+            # ==================================================
+
+            echo "Esperando que los servicios inicien..."
+
+            sleep 15
+
+
+            # ==================================================
+            # Mostrar estado
+            # ==================================================
+
+            echo "=========================================="
+            echo "Estado de los contenedores"
+            echo "=========================================="
+
+            docker compose ps
+
+
+            # ==================================================
+            # Mostrar logs recientes
+            # ==================================================
+
+            echo "=========================================="
+            echo "Logs recientes"
+            echo "=========================================="
+
+            docker compose logs --tail=30
+
+
+            # ==================================================
+            # Limpiar imágenes antiguas
+            # ==================================================
+
+            echo "Limpiando imágenes antiguas..."
+
+            docker image prune -af --filter "until=168h"
+
+
+            echo "=========================================="
+            echo "Deployment finalizado"
+            echo "=========================================="

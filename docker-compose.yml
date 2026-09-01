@@ -88,8 +88,11 @@ services:
   # PRODUCTO SERVICE
   # ============================
   producto-service:
-    build:
-      context: ./producto_services  # Direcciona cada proyecto "C:\Users\rober\Desktop\tienda-microservices\producto-service"
+
+    image: roberthz/producto-service:latest
+
+    #build:
+    #  context: ./producto_services  # Direcciona cada proyecto "C:\Users\rober\Desktop\tienda-microservices\producto-service"
 
     container_name: producto-service
 
@@ -110,8 +113,11 @@ services:
   # INVENTARIO SERVICE
   # ============================
   inventario-service:
-    build:
-      context: ./inventario_services
+
+    image: roberthz/inventario-service:latest
+
+    #build:
+    #  context: ./inventario_services
 
     container_name: inventario-service
 
@@ -134,8 +140,11 @@ services:
   # VENTA SERVICE
   # ============================
   venta-service:
-    build:
-      context: ./venta_services
+
+    image: roberthz/venta-service:latest
+
+    #build:
+    #  context: ./venta_services
 
     container_name: venta-service
 
