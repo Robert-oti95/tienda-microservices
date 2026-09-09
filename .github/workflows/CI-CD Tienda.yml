@@ -3,7 +3,11 @@ name: CI/CD Tienda Microservices
 on:
   push:
     branches:
-      - main
+      - master
+
+  pull_request:
+    branches:
+      - master
 
   workflow_dispatch:
 
@@ -218,7 +222,12 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Push a master o ejecución manual
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/master'
+      ||
+      github.event_name == 'workflow_dispatch'
 
     steps:
 
@@ -329,8 +338,12 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    # Ejecutar solamente después de un push a main
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Push a master o ejecución manual
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/master'
+      ||
+      github.event_name == 'workflow_dispatch'
 
     steps:
 
