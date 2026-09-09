@@ -1,0 +1,42 @@
+name: Test SSH Server
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  test-ssh:
+
+    name: Probar conexión SSH
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Probar conexión al servidor Linux
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+
+          script: |
+            echo "=========================================="
+            echo "CONEXIÓN SSH EXITOSA"
+            echo "=========================================="
+
+            echo "Usuario conectado:"
+            whoami
+
+            echo "Servidor:"
+            hostname
+
+            echo "Sistema operativo:"
+            uname -a
+
+            echo "IP del servidor:"
+            hostname -I
+
+            echo "=========================================="
+            echo "SSH FUNCIONA CORRECTAMENTE"
+            echo "=========================================="
