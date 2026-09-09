@@ -32,7 +32,7 @@ jobs:
 
   # ==========================================================
   # JOB 1 - CI
-  # Compilar, ejecutar pruebas y generar JAR
+  # Compilar, levantar BD y ejecutar pruebas
   # ==========================================================
 
   build-and-test:
@@ -74,11 +74,93 @@ jobs:
 
 
       # ======================================================
+      # LEVANTAR BASES DE DATOS PARA LOS TESTS
+      # ======================================================
+
+      - name: Levantar PostgreSQL para CI
+        run: |
+          docker run -d \
+            --name producto-db \
+            -e POSTGRES_DB=producto_db \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=123456 \
+            -p 5432:5432 \
+            postgres:17
+
+          docker run -d \
+            --name inventario-db \
+            -e POSTGRES_DB=inventario_db \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=123456 \
+            -p 5433:5432 \
+            postgres:17
+
+          docker run -d \
+            --name venta-db \
+            -e POSTGRES_DB=venta_db \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=123456 \
+            -p 5434:5432 \
+            postgres:17
+
+
+      # ------------------------------------------------------
+      # Esperar a que PostgreSQL esté disponible
+      # ------------------------------------------------------
+
+      - name: Esperar PostgreSQL
+        run: |
+          echo "Esperando PostgreSQL..."
+
+          for i in {1..30}; do
+
+            if docker exec producto-db pg_isready \
+              -U postgres \
+              -d producto_db; then
+              echo "Producto DB lista"
+              break
+            fi
+
+            sleep 2
+          done
+
+
+          for i in {1..30}; do
+
+            if docker exec inventario-db pg_isready \
+              -U postgres \
+              -d inventario_db; then
+              echo "Inventario DB lista"
+              break
+            fi
+
+            sleep 2
+          done
+
+
+          for i in {1..30}; do
+
+            if docker exec venta-db pg_isready \
+              -U postgres \
+              -d venta_db; then
+              echo "Venta DB lista"
+              break
+            fi
+
+            sleep 2
+          done
+
+
+      # ======================================================
       # PRODUCTO
       # ======================================================
 
       - name: Compilar y probar - Producto
         working-directory: ./producto_services
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/producto_db
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: 123456
         run: ./mvnw clean package -DskipTests=false
 
 
@@ -88,6 +170,10 @@ jobs:
 
       - name: Compilar y probar - Inventario
         working-directory: ./inventario_services
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5433/inventario_db
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: 123456
         run: ./mvnw clean package -DskipTests=false
 
 
@@ -97,6 +183,10 @@ jobs:
 
       - name: Compilar y probar - Venta
         working-directory: ./venta_services
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5434/venta_db
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: 123456
         run: ./mvnw clean package -DskipTests=false
 
 
@@ -128,7 +218,6 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    # Ejecutar solamente después de un push a main
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
