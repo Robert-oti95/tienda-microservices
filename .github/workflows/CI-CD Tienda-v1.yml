@@ -1,13 +1,13 @@
 name: CI/CD Tienda Microservices
 
 on:
-  #push:
-  #  branches:
-  #    - master
+  push:
+    branches:
+      - master
 
-  #pull_request:
-  #  branches:
-  #    - master
+  pull_request:
+    branches:
+      - master
 
   workflow_dispatch:
 
@@ -327,120 +327,175 @@ jobs:
 
   # ==========================================================
   # JOB 3 - DEPLOY
-  # Desplegar las nuevas imágenes en el servidor
+  # Desplegar nuevas imÃ¡genes en el servidor VMware
+  # mediante Self-hosted Runner
   # ==========================================================
 
   deploy:
 
     name: Deploy - Docker Compose
-
     needs: build-push-images
 
-    runs-on: ubuntu-latest
+    # --------------------------------------------------------
+    # El job se ejecuta directamente en robert-server
+    # --------------------------------------------------------
 
-    # Push a master o ejecución manual
+    runs-on: self-hosted
+
+    # Ejecutar Ãºnicamente:
+    # - Push a master
+    # - EjecuciÃ³n manual
+
     if: |
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/master'
-      ||
+      (github.event_name == 'push' &&
+      github.ref == 'refs/heads/master') ||
       github.event_name == 'workflow_dispatch'
 
     steps:
 
       # ------------------------------------------------------
-      # Conectarse al servidor mediante SSH
+      # Descargar cÃ³digo en el Self-hosted Runner
       # ------------------------------------------------------
 
-      - name: Conectarse al servidor y desplegar
-        uses: appleboy/ssh-action@v1.2.2
-
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-
-          script: |
-
-            echo "=========================================="
-            echo "Iniciando deployment"
-            echo "=========================================="
+      - name: Descargar cÃ³digo
+        uses: actions/checkout@v4
 
 
-            # ==================================================
-            # Ir al proyecto
-            # ==================================================
+      # ------------------------------------------------------
+      # Verificar servidor
+      # ------------------------------------------------------
 
-            cd /home/robert/tienda-microservices || exit 1
+      - name: Verificar servidor
+        run: |
+          echo "=========================================="
+          echo "SERVIDOR DE DESPLIEGUE"
+          echo "=========================================="
 
+          echo "Hostname:"
+          hostname
 
-            # ==================================================
-            # Login en Docker Hub
-            # ==================================================
+          echo "Usuario:"
+          whoami
 
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
-              -u "${{ secrets.DOCKERHUB_USERNAME }}" \
-              --password-stdin
+          echo "Directorio:"
+          pwd
 
+          echo ""
+          echo "=========================================="
+          echo "DOCKER"
+          echo "=========================================="
 
-            # ==================================================
-            # Descargar nuevas imágenes
-            # ==================================================
-
-            echo "Descargando nuevas imágenes..."
-
-            docker compose pull
-
-
-            # ==================================================
-            # Levantar nuevos contenedores
-            # ==================================================
-
-            echo "Actualizando servicios..."
-
-            docker compose up -d --remove-orphans
+          docker --version
+          docker compose version
 
 
-            # ==================================================
-            # Esperar que los servicios inicien
-            # ==================================================
+      # ------------------------------------------------------
+      # Login en Docker Hub
+      # ------------------------------------------------------
 
-            echo "Esperando que los servicios inicien..."
-
-            sleep 15
-
-
-            # ==================================================
-            # Mostrar estado
-            # ==================================================
-
-            echo "=========================================="
-            echo "Estado de los contenedores"
-            echo "=========================================="
-
-            docker compose ps
+      - name: Login en Docker Hub
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" \
+            --password-stdin
 
 
-            # ==================================================
-            # Mostrar logs recientes
-            # ==================================================
+      # ======================================================
+      # DESPLIEGUE
+      # ======================================================
 
-            echo "=========================================="
-            echo "Logs recientes"
-            echo "=========================================="
+      - name: Desplegar con Docker Compose
+        run: |
 
-            docker compose logs --tail=30
+          echo "=========================================="
+          echo "INICIANDO DEPLOYMENT"
+          echo "=========================================="
+
+          echo "Directorio de trabajo:"
+          pwd
+
+          echo ""
+          echo "Archivos del proyecto:"
+          ls -la
 
 
-            # ==================================================
-            # Limpiar imágenes antiguas
-            # ==================================================
+          # --------------------------------------------------
+          # Descargar nuevas imÃ¡genes
+          # --------------------------------------------------
 
-            echo "Limpiando imágenes antiguas..."
+          echo ""
+          echo "=========================================="
+          echo "DESCARGANDO NUEVAS IMÃGENES"
+          echo "=========================================="
 
-            docker image prune -af --filter "until=168h"
+          docker compose pull
 
 
-            echo "=========================================="
-            echo "Deployment finalizado"
-            echo "=========================================="
+          # --------------------------------------------------
+          # Actualizar servicios
+          # --------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "ACTUALIZANDO SERVICIOS"
+          echo "=========================================="
+
+          docker compose up -d --remove-orphans
+
+
+          # --------------------------------------------------
+          # Esperar inicio de servicios
+          # --------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "ESPERANDO INICIO DE SERVICIOS"
+          echo "=========================================="
+
+          sleep 15
+
+
+          # --------------------------------------------------
+          # Mostrar estado
+          # --------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "ESTADO DE LOS CONTENEDORES"
+          echo "=========================================="
+
+          docker compose ps
+
+
+          # --------------------------------------------------
+          # Mostrar logs recientes
+          # --------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "LOGS RECIENTES"
+          echo "=========================================="
+
+          docker compose logs --tail=30
+
+
+          # --------------------------------------------------
+          # Limpiar imÃ¡genes antiguas
+          # --------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "LIMPIANDO IMÃGENES ANTIGUAS"
+          echo "=========================================="
+
+          docker image prune -af --filter "until=168h"
+
+
+          # --------------------------------------------------
+          # FinalizaciÃ³n
+          # --------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "DEPLOYMENT FINALIZADO"
+          echo "=========================================="
